@@ -1,7 +1,6 @@
 import './App.css'
 import Grain from './Grain'
 import PlanetDisk from './PlanetDisk'
-import HaloController from './HaloController'
 
 function App() {
   return (
@@ -25,7 +24,6 @@ function App() {
         <div className="content">
           {/* ── Portal ── */}
           <div className="portal">
-            <HaloController />
             <div className="portal__layer portal__glow" />
             <div className="portal__layer portal__wisps" />
             <div className="portal__layer portal__swirl-outer" />

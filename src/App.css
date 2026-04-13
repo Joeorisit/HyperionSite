@@ -172,11 +172,7 @@
 }
 
 /* ══════════════════════════════════════
-   Portal / Black Hole — organic, imperfect
-   ══════════════════════════════════════ */
-/* ══════════════════════════════════════
-   Portal — JS-driven halo rotations via
-   CSS custom properties from HaloController.
+   Portal / Black Hole — CSS keyframe driven
    ══════════════════════════════════════ */
 .portal {
   position: relative;
@@ -184,14 +180,6 @@
   height: clamp(220px, 40vmin, 360px);
   opacity: 0;
   animation: portalFadeIn 4.5s ease 0.5s forwards;
-  --rot-glow: 0deg;
-  --rot-outer: 0deg;
-  --rot-mid: 0deg;
-  --rot-inner: 0deg;
-  --rot-corona: 0deg;
-  --rot-flare: 0deg;
-  --rot-wisps: 0deg;
-  --halo-convergence: 0;
 }
 
 @keyframes portalFadeIn {
@@ -204,6 +192,10 @@
   inset: 0;
 }
 
+/* ── Halo layers: x-stretched ellipses that rotate.
+     When all at 0°/180° they align horizontally → eye shape.
+     animation-direction: alternate makes the loop seamless. ── */
+
 .portal__glow {
   inset: -40%;
   border-radius: 50%;
@@ -214,8 +206,39 @@
     rgba(40, 80, 140, 0.03) 55%,
     transparent 72%
   );
-  transform: rotate(var(--rot-glow)) scaleX(1.8);
-  opacity: calc(0.5 + var(--halo-convergence) * 0.5);
+  transform: scaleX(1.8);
+  animation: haloGlow 18s ease-in-out infinite alternate;
+}
+
+@keyframes haloGlow {
+  0%   { transform: rotate(0deg) scaleX(1.8); }
+  30%  { transform: rotate(105deg) scaleX(1.8); }
+  70%  { transform: rotate(250deg) scaleX(1.8); }
+  100% { transform: rotate(360deg) scaleX(1.8); }
+}
+
+.portal__wisps {
+  inset: -20% -50% -20% -50%;
+  border-radius: 40% 56% 44% 60% / 58% 42% 55% 40%;
+  background: conic-gradient(
+    from 60deg,
+    transparent 0deg,
+    rgba(140, 80, 160, 0.07) 20deg,
+    transparent 50deg,
+    rgba(180, 100, 140, 0.05) 140deg,
+    transparent 180deg,
+    rgba(120, 70, 150, 0.06) 260deg,
+    transparent 300deg
+  );
+  filter: blur(25px);
+  animation: haloWisps 22s ease-in-out infinite alternate;
+}
+
+@keyframes haloWisps {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(-120deg); }
+  70%  { transform: rotate(-240deg); }
+  100% { transform: rotate(-360deg); }
 }
 
 .portal__swirl-outer {
@@ -232,7 +255,14 @@
     transparent 330deg
   );
   filter: blur(18px);
-  transform: rotate(var(--rot-outer));
+  animation: haloOuter 14s ease-in-out infinite alternate;
+}
+
+@keyframes haloOuter {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(130deg); }
+  70%  { transform: rotate(230deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .portal__swirl-mid {
@@ -249,7 +279,14 @@
     transparent 350deg
   );
   filter: blur(12px);
-  transform: rotate(var(--rot-mid));
+  animation: haloMid 16s ease-in-out infinite alternate;
+}
+
+@keyframes haloMid {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(-140deg); }
+  70%  { transform: rotate(-220deg); }
+  100% { transform: rotate(-360deg); }
 }
 
 .portal__swirl-inner {
@@ -266,7 +303,14 @@
     transparent 340deg
   );
   filter: blur(8px);
-  transform: rotate(var(--rot-inner));
+  animation: haloInner 12s ease-in-out infinite alternate;
+}
+
+@keyframes haloInner {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(100deg); }
+  70%  { transform: rotate(260deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* ── Eclipse: corona backlight ── */
@@ -282,8 +326,15 @@
     transparent 100%
   );
   filter: blur(6px);
-  transform: rotate(var(--rot-corona)) scaleX(1.4);
-  opacity: calc(0.5 + var(--halo-convergence) * 0.5);
+  transform: scaleX(1.4);
+  animation: haloCorona 20s ease-in-out infinite alternate;
+}
+
+@keyframes haloCorona {
+  0%   { transform: rotate(0deg) scaleX(1.4); }
+  30%  { transform: rotate(-110deg) scaleX(1.4); }
+  70%  { transform: rotate(-250deg) scaleX(1.4); }
+  100% { transform: rotate(-360deg) scaleX(1.4); }
 }
 
 /* ── Eclipse: asymmetric flare ── */
@@ -302,11 +353,17 @@
     transparent 300deg
   );
   filter: blur(10px);
-  transform: rotate(var(--rot-flare));
-  opacity: calc(0.6 + var(--halo-convergence) * 0.4);
+  animation: haloFlare 24s ease-in-out infinite alternate;
 }
 
-/* ── Eclipse: tight rim light — pulses brighter during convergence ── */
+@keyframes haloFlare {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(95deg); }
+  70%  { transform: rotate(265deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ── Eclipse: tight rim light ── */
 .portal__horizon {
   inset: 30%;
   border-radius: 50%;
@@ -316,30 +373,12 @@
     0 0 12px 2px rgba(126, 184, 218, 0.4),
     0 0 30px 4px rgba(126, 184, 218, 0.2),
     0 0 60px 8px rgba(80, 150, 210, 0.08);
-  opacity: calc(0.6 + var(--halo-convergence) * 0.4);
 }
 
 /* portal__core is now canvas-rendered by PlanetDisk.tsx */
 
-.portal__wisps {
-  inset: -20% -50% -20% -50%;
-  border-radius: 40% 56% 44% 60% / 58% 42% 55% 40%;
-  background: conic-gradient(
-    from 60deg,
-    transparent 0deg,
-    rgba(140, 80, 160, 0.07) 20deg,
-    transparent 50deg,
-    rgba(180, 100, 140, 0.05) 140deg,
-    transparent 180deg,
-    rgba(120, 70, 150, 0.06) 260deg,
-    transparent 300deg
-  );
-  filter: blur(25px);
-  transform: rotate(var(--rot-wisps));
-}
-
 /* ══════════════════════════════════════
-   Contact — pinned to bottom, Geist font
+   Contact — pinned to bottom
    ══════════════════════════════════════ */
 .contact {
   position: absolute;
@@ -370,9 +409,4 @@
   color: #2A2C34;
   font-size: 0.5rem;
   user-select: none;
-}
-
-@keyframes fadeFull {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }

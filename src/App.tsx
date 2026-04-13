@@ -42,7 +42,7 @@ function App() {
           <a href="mailto:contact@hyperion.com">contact@hyperion.com</a>
           <span className="sep">&#9679;</span>
           <a
-            href="https://linkedin.com/company/hyperion"
+            href="https://www.linkedin.com/in/jonah-elliott-87771024a/"
             target="_blank"
             rel="noopener noreferrer"
           >

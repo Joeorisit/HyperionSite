@@ -375,11 +375,7 @@
     0 0 60px 8px rgba(80, 150, 210, 0.08);
 }
 
-/* portal__core is now canvas-rendered by PlanetDisk.tsx */
-
-/* ══════════════════════════════════════
-   Contact — pinned to bottom
-   ══════════════════════════════════════ */
+/* ── Contact ── */
 .contact {
   position: absolute;
   bottom: 1.5rem;

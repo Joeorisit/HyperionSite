@@ -1,9 +1,20 @@
 import { useEffect, useRef } from 'react'
 
+const SIZE = 360
+const CX = SIZE / 2
+const CY = SIZE / 2
+const BASE_R = SIZE * 0.38
+const NUM_POINTS = 32
+const AMP = 6          // ±3px max offset
+const DRAW_STEPS = 128 // segments around the circle
+const TWO_PI = Math.PI * 2
+const FPS = 30
+const FRAME_INTERVAL = 1000 / FPS
+
 /**
  * Black planet disk with a subtly wavy, organic edge.
- * Uses layered low-frequency noise to create slow random
- * bumps that poke out from an otherwise round shape.
+ * Control points drift toward random targets for slow,
+ * natural-looking edge distortion.
  */
 export default function PlanetDisk() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -13,89 +24,79 @@ export default function PlanetDisk() {
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
 
-    const DPR = window.devicePixelRatio || 1
-    const SIZE = 360
-    canvas.width = SIZE * DPR
-    canvas.height = SIZE * DPR
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = SIZE * dpr
+    canvas.height = SIZE * dpr
     canvas.style.width = '100%'
     canvas.style.height = '100%'
-    ctx.scale(DPR, DPR)
+    ctx.scale(dpr, dpr)
 
-    const cx = SIZE / 2
-    const cy = SIZE / 2
-    // Match the CSS portal__core inset: 31% → radius is 38% of container
-    const BASE_R = SIZE * 0.38
-
-    // Seed a ring of random offset targets around the circle.
-    // These drift slowly to new targets over time for organic movement.
-    const NUM_POINTS = 32
-    const offsets: number[] = new Array(NUM_POINTS).fill(0)
-    const targets: number[] = new Array(NUM_POINTS).fill(0)
-    const speeds: number[] = []
+    const offsets = new Float32Array(NUM_POINTS)
+    const targets = new Float32Array(NUM_POINTS)
+    const speeds = new Float32Array(NUM_POINTS)
 
     for (let i = 0; i < NUM_POINTS; i++) {
-      targets[i] = (Math.random() - 0.5) * 6 // ±3px max
+      targets[i] = (Math.random() - 0.5) * AMP
       speeds[i] = 0.003 + Math.random() * 0.008
     }
 
-    // Smooth interpolation with wrap-around
     function getSmoothedRadius(angle: number): number {
-      const idx = (angle / (Math.PI * 2)) * NUM_POINTS
+      const idx = (angle / TWO_PI) * NUM_POINTS
       const i0 = Math.floor(idx) % NUM_POINTS
       const i1 = (i0 + 1) % NUM_POINTS
       const frac = idx - Math.floor(idx)
-      // Cubic smoothstep
-      const t = frac * frac * (3 - 2 * frac)
-      const offset = offsets[i0] * (1 - t) + offsets[i1] * t
-      return BASE_R + offset
+      const t = frac * frac * (3 - 2 * frac) // cubic smoothstep
+      return BASE_R + offsets[i0] * (1 - t) + offsets[i1] * t
     }
 
+    // Pre-compute the radial gradient once — it doesn't change
+    const shadowGrad = ctx.createRadialGradient(CX, CY, BASE_R - 5, CX, CY, BASE_R + 25)
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)')
+    shadowGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)')
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)')
+
     let frame = 0
+    let lastTime = 0
 
-    function draw() {
+    function draw(now: number) {
       frame = requestAnimationFrame(draw)
+      if (now - lastTime < FRAME_INTERVAL) return
+      lastTime = now
 
-      // Drift offsets toward targets, pick new targets when close
+      // Drift offsets toward targets
       for (let i = 0; i < NUM_POINTS; i++) {
         offsets[i] += (targets[i] - offsets[i]) * speeds[i]
         if (Math.abs(targets[i] - offsets[i]) < 0.15) {
-          targets[i] = (Math.random() - 0.5) * 6
+          targets[i] = (Math.random() - 0.5) * AMP
         }
       }
 
       ctx.clearRect(0, 0, SIZE, SIZE)
 
-      // ── Dark shadow halo ──
+      // Shadow halo
       ctx.beginPath()
-      const STEPS = 256
-      for (let i = 0; i <= STEPS; i++) {
-        const a = (i / STEPS) * Math.PI * 2
+      for (let i = 0; i <= DRAW_STEPS; i++) {
+        const a = (i / DRAW_STEPS) * TWO_PI
         const r = getSmoothedRadius(a) + 15
-        const x = cx + Math.cos(a) * r
-        const y = cy + Math.sin(a) * r
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
+        const x = CX + Math.cos(a) * r
+        const y = CY + Math.sin(a) * r
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
       }
       ctx.closePath()
-      const shadowGrad = ctx.createRadialGradient(cx, cy, BASE_R - 5, cx, cy, BASE_R + 25)
-      shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)')
-      shadowGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)')
-      shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)')
       ctx.fillStyle = shadowGrad
       ctx.fill()
 
-      // ── Black planet disk with wavy edge ──
+      // Black planet disk
       ctx.beginPath()
-      for (let i = 0; i <= STEPS; i++) {
-        const a = (i / STEPS) * Math.PI * 2
+      for (let i = 0; i <= DRAW_STEPS; i++) {
+        const a = (i / DRAW_STEPS) * TWO_PI
         const r = getSmoothedRadius(a)
-        const x = cx + Math.cos(a) * r
-        const y = cy + Math.sin(a) * r
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
+        const x = CX + Math.cos(a) * r
+        const y = CY + Math.sin(a) * r
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
       }
       ctx.closePath()
-      ctx.fillStyle = '#000000'
+      ctx.fillStyle = '#000'
       ctx.fill()
     }
 
@@ -108,7 +109,7 @@ export default function PlanetDisk() {
       ref={canvasRef}
       style={{
         position: 'absolute',
-        inset: '0',
+        inset: 0,
         width: '100%',
         height: '100%',
         pointerEvents: 'none',

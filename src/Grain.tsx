@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react'
 
+const GRAIN_SIZE = 128
+const GRAIN_FPS = 18
+const GRAIN_INTERVAL = 1000 / GRAIN_FPS
+const PIXEL_ALPHA = 12 // ~4.7% opacity per pixel
+
 /**
  * Full-screen animated film-grain overlay.
  * Renders random noise on a small offscreen canvas, then draws it
- * scaled-up onto the visible canvas. Throttled to ~18 fps to keep
- * the shimmer organic without burning CPU.
+ * scaled-up onto the visible canvas for chunky grain texture.
  */
 export default function Grain() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -12,16 +16,18 @@ export default function Grain() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d', { alpha: true })
     if (!ctx) return
 
-    // Small source — gets stretched to fill screen for chunky grain
-    const SIZE = 128
     const offscreen = document.createElement('canvas')
-    offscreen.width = SIZE
-    offscreen.height = SIZE
+    offscreen.width = GRAIN_SIZE
+    offscreen.height = GRAIN_SIZE
     const offCtx = offscreen.getContext('2d')!
+
+    // Pre-allocate buffer once — reuse every frame
+    const imageData = offCtx.createImageData(GRAIN_SIZE, GRAIN_SIZE)
+    const buf32 = new Uint32Array(imageData.data.buffer)
+    const pixelCount = GRAIN_SIZE * GRAIN_SIZE
 
     const resize = () => {
       canvas.width = window.innerWidth
@@ -32,34 +38,25 @@ export default function Grain() {
 
     let frame = 0
     let last = 0
-    const INTERVAL = 1000 / 18 // ~18 fps
 
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw)
-      if (now - last < INTERVAL) return
+      if (now - last < GRAIN_INTERVAL) return
       last = now
 
-      const imageData = offCtx.createImageData(SIZE, SIZE)
-      const data = imageData.data
-
-      for (let i = 0; i < data.length; i += 4) {
+      // Write ABGR pixels via Uint32Array (little-endian)
+      for (let i = 0; i < pixelCount; i++) {
         const v = (Math.random() * 255) | 0
-        data[i] = v      // R
-        data[i + 1] = v  // G
-        data[i + 2] = v  // B
-        data[i + 3] = 12 // A — very subtle (~4.7% opacity per pixel)
+        buf32[i] = (PIXEL_ALPHA << 24) | (v << 16) | (v << 8) | v
       }
 
       offCtx.putImageData(imageData, 0, 0)
-
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      // Disable smoothing so upscale stays crispy
       ctx.imageSmoothingEnabled = false
       ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height)
     }
 
     frame = requestAnimationFrame(draw)
-
     return () => {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', resize)

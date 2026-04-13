@@ -5,15 +5,13 @@ import PlanetDisk from './PlanetDisk'
 function App() {
   return (
     <>
-      {/* ── Animated grain overlay ── */}
       <Grain />
 
-      {/* ── Atmospheric background ── */}
-      <div className="bg">
+      {/* Decorative background — hidden from assistive tech */}
+      <div className="bg" aria-hidden="true">
         <div className="bg__blob--1" />
         <div className="bg__blob--2" />
         <div className="bg__blob--3" />
-        {/* ── Offset accent lines ── */}
         <div className="bg__line bg__line--1" />
         <div className="bg__line bg__line--2" />
         <div className="bg__line bg__line--3" />
@@ -22,8 +20,8 @@ function App() {
 
       <div className="page">
         <div className="content">
-          {/* ── Portal ── */}
-          <div className="portal">
+          {/* Portal — decorative, screen readers skip to the heading */}
+          <div className="portal" aria-hidden="true">
             <div className="portal__layer portal__glow" />
             <div className="portal__layer portal__wisps" />
             <div className="portal__layer portal__swirl-outer" />
@@ -33,14 +31,13 @@ function App() {
             <div className="portal__layer portal__corona-flare" />
             <div className="portal__layer portal__horizon" />
             <PlanetDisk />
-            <h1 className="title">HYPERION</h1>
           </div>
+          <h1 className="title">HYPERION</h1>
         </div>
 
-        {/* ── Contact pinned to bottom ── */}
-        <div className="contact">
+        <nav className="contact" aria-label="Contact links">
           <a href="mailto:contact@hyperion.com">contact@hyperion.com</a>
-          <span className="sep">&#9679;</span>
+          <span className="sep" aria-hidden="true">&#9679;</span>
           <a
             href="https://www.linkedin.com/in/jonah-elliott-87771024a/"
             target="_blank"
@@ -48,7 +45,7 @@ function App() {
           >
             LinkedIn
           </a>
-        </div>
+        </nav>
       </div>
     </>
   )

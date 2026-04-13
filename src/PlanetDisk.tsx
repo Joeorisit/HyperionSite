@@ -31,6 +31,9 @@ export default function PlanetDisk() {
     canvas.style.height = '100%'
     ctx.scale(dpr, dpr)
 
+    // Respect reduced motion: render one static frame only
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     const offsets = new Float32Array(NUM_POINTS)
     const targets = new Float32Array(NUM_POINTS)
     const speeds = new Float32Array(NUM_POINTS)
@@ -100,13 +103,19 @@ export default function PlanetDisk() {
       ctx.fill()
     }
 
-    frame = requestAnimationFrame(draw)
+    if (prefersReduced) {
+      draw(performance.now()) // single static frame
+    } else {
+      frame = requestAnimationFrame(draw)
+    }
     return () => cancelAnimationFrame(frame)
   }, [])
 
   return (
     <canvas
       ref={canvasRef}
+      role="img"
+      aria-hidden="true"
       style={{
         position: 'absolute',
         inset: 0,

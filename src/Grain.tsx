@@ -19,6 +19,9 @@ export default function Grain() {
     const ctx = canvas.getContext('2d', { alpha: true })
     if (!ctx) return
 
+    // Respect reduced motion: render one static frame only
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     const offscreen = document.createElement('canvas')
     offscreen.width = GRAIN_SIZE
     offscreen.height = GRAIN_SIZE
@@ -56,7 +59,11 @@ export default function Grain() {
       ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height)
     }
 
-    frame = requestAnimationFrame(draw)
+    if (prefersReduced) {
+      draw(performance.now()) // single static frame
+    } else {
+      frame = requestAnimationFrame(draw)
+    }
     return () => {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', resize)
@@ -66,6 +73,8 @@ export default function Grain() {
   return (
     <canvas
       ref={canvasRef}
+      role="img"
+      aria-hidden="true"
       style={{
         position: 'fixed',
         inset: 0,

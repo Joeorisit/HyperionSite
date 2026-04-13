@@ -1,28 +1,23 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * Drives halo layer rotations via CSS custom properties.
+ * Layers spin continuously. Periodically, they all smoothly
+ * decelerate, pass through 0° alignment (eye), pause briefly,
+ * then smoothly accelerate back to their original speeds.
  *
- * No hard phase transitions. Layers spin freely with random
- * velocities. An invisible "gravitational" bias slowly steers
- * them toward 0° alignment. The pull starts so gently it's
- * imperceptible, strengthens gradually, and by the time the
- * layers align it looks like they just happened to converge.
- * After a brief hold, they scatter with fresh velocities and
- * the cycle restarts with a new random duration.
+ * Each layer's speed is nudged slightly so it arrives at 0°
+ * exactly when the pause happens — the nudge is spread over
+ * seconds so it's invisible.
  */
-
-interface Layer {
-  angle: number
-  velocity: number
-  targetVelocity: number
-}
 
 const NUM_LAYERS = 7
 const LAYER_NAMES = [
   '--rot-glow', '--rot-outer', '--rot-mid', '--rot-inner',
   '--rot-corona', '--rot-flare', '--rot-wisps'
 ]
+
+// Base velocities (deg/s) — each layer spins at its own constant rate
+const BASE_VELOCITIES = [22, -35, 28, -18, 40, -30, 15]
 
 export default function HaloController() {
   const ref = useRef<HTMLDivElement>(null)
@@ -33,144 +28,140 @@ export default function HaloController() {
     const portal = el.closest('.portal') as HTMLElement
     if (!portal) return
 
-    function randomVelocity(): number {
-      return (25 + Math.random() * 55) * (Math.random() < 0.5 ? 1 : -1)
-    }
+    const angles = new Float64Array(NUM_LAYERS) // start at 0
+    const velocities = BASE_VELOCITIES.map(v => v) // current velocities
+    const adjustedVelocities = BASE_VELOCITIES.map(v => v) // target during approach
 
-    function normAngle(a: number): number {
-      a = a % 360
-      if (a > 180) a -= 360
-      if (a < -180) a += 360
-      return a
-    }
-
-    const layers: Layer[] = []
-    for (let i = 0; i < NUM_LAYERS; i++) {
-      const vel = randomVelocity()
-      layers.push({
-        angle: Math.random() * 360,
-        velocity: vel,
-        targetVelocity: vel,
-      })
-    }
-
-    // Cycle timing
-    let cycleTime = 0
-    let cycleDuration = 8 + Math.random() * 6   // 8-14s total cycle (faster)
-    let pullStart = cycleDuration * 0.3
-    let holdDuration = 1.0 + Math.random() * 0.8
-    let phase: 'spinning' | 'holding' | 'releasing' = 'spinning'
-    let holdTime = 0
-    let releaseTime = 0
-    let releaseDuration = 3 + Math.random() * 2 // 3-5s gentle ramp back up
+    type Phase = 'spinning' | 'approaching' | 'holding' | 'departing'
+    let phase: Phase = 'spinning'
+    let phaseTime = 0
+    let nextPause = 8 + Math.random() * 6 // 8-14s until first pause
+    const approachDuration = 4 // seconds to smoothly adjust speed
+    let holdDuration = 1.2 + Math.random() * 0.6
+    const departDuration = 3.5 // seconds to ramp back up
 
     let lastTime = performance.now()
     let frame = 0
 
-    function newCycle() {
-      cycleDuration = 8 + Math.random() * 6
-      pullStart = cycleDuration * (0.25 + Math.random() * 0.15)
-      holdDuration = 1.0 + Math.random() * 0.8
-      releaseDuration = 3 + Math.random() * 2
-      cycleTime = 0
-      phase = 'releasing'
-      releaseTime = 0
-      // Set target velocities but start from near-zero
-      for (const layer of layers) {
-        layer.velocity = 0
-        layer.targetVelocity = randomVelocity()
+    function normAngle(a: number): number {
+      return ((a % 360) + 360) % 360 // 0-360
+    }
+
+    function calcAdjustedVelocities() {
+      // For each layer, figure out what velocity it needs so that
+      // over the approach duration, it ends up at angle ≡ 0 (mod 360)
+      for (let i = 0; i < NUM_LAYERS; i++) {
+        const current = normAngle(angles[i])
+        const baseV = BASE_VELOCITIES[i]
+
+        // How much extra rotation needed to land on 0°?
+        // If going positive, we need to reach the next multiple of 360
+        // If going negative, same idea
+        let target: number
+        if (baseV >= 0) {
+          target = current + baseV * approachDuration
+          // Round up to next multiple of 360
+          target = Math.ceil(target / 360) * 360
+        } else {
+          target = current + baseV * approachDuration
+          // Round down to next multiple of 360 (including 0)
+          target = Math.floor(target / 360) * 360
+        }
+
+        // Velocity needed to reach that target in approachDuration
+        adjustedVelocities[i] = (target - current) / approachDuration
       }
+    }
+
+    // Smooth easing: ease-in-out cubic
+    function easeInOut(t: number): number {
+      return t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2
     }
 
     function update(now: number) {
       frame = requestAnimationFrame(update)
       const dt = Math.min((now - lastTime) / 1000, 0.05)
       lastTime = now
+      phaseTime += dt
 
-      if (phase === 'holding') {
-        holdTime += dt
+      if (phase === 'spinning') {
+        // Spin at base velocities
         for (let i = 0; i < NUM_LAYERS; i++) {
-          layers[i].angle = Math.sin(now * 0.0008 + i * 1.7) * 0.4
+          velocities[i] = BASE_VELOCITIES[i]
+          angles[i] += velocities[i] * dt
         }
-        if (holdTime > holdDuration) {
-          newCycle()
+
+        if (phaseTime > nextPause) {
+          phase = 'approaching'
+          phaseTime = 0
+          calcAdjustedVelocities()
         }
-      } else if (phase === 'releasing') {
-        releaseTime += dt
-        cycleTime += dt
-        // Cubic ease-in: velocities ramp up very slowly at first
-        const ramp = Math.min(releaseTime / releaseDuration, 1)
-        const ease = ramp * ramp * ramp
-        for (const layer of layers) {
-          // Gently accelerate toward target velocity
-          layer.velocity += (layer.targetVelocity * ease - layer.velocity) * 1.5 * dt
-          if (Math.random() < 0.004) {
-            layer.targetVelocity = randomVelocity()
+      } else if (phase === 'approaching') {
+        // Smoothly blend from base velocity to adjusted velocity,
+        // then smoothly decelerate to 0
+        const progress = Math.min(phaseTime / approachDuration, 1)
+        const ease = easeInOut(progress)
+
+        for (let i = 0; i < NUM_LAYERS; i++) {
+          // Blend velocity: base → adjusted (which lands on 0°)
+          // Also decelerate toward the end
+          const blendedV = BASE_VELOCITIES[i] + (adjustedVelocities[i] - BASE_VELOCITIES[i]) * ease
+          // Additional decel in the last 30%
+          const decelFactor = progress > 0.7 ? 1 - easeInOut((progress - 0.7) / 0.3) : 1
+          velocities[i] = blendedV * decelFactor
+          angles[i] += velocities[i] * dt
+        }
+
+        if (progress >= 1) {
+          phase = 'holding'
+          phaseTime = 0
+          holdDuration = 1.2 + Math.random() * 0.6
+          // Snap to clean 0°
+          for (let i = 0; i < NUM_LAYERS; i++) {
+            angles[i] = 0
+            velocities[i] = 0
           }
-          layer.angle += layer.velocity * dt
         }
-        if (ramp >= 1) {
+      } else if (phase === 'holding') {
+        // Tiny alive drift
+        for (let i = 0; i < NUM_LAYERS; i++) {
+          angles[i] = Math.sin(now * 0.0008 + i * 1.7) * 0.3
+        }
+
+        if (phaseTime > holdDuration) {
+          phase = 'departing'
+          phaseTime = 0
+        }
+      } else if (phase === 'departing') {
+        // Smoothly ramp back to base velocities
+        const progress = Math.min(phaseTime / departDuration, 1)
+        const ease = easeInOut(progress)
+
+        for (let i = 0; i < NUM_LAYERS; i++) {
+          velocities[i] = BASE_VELOCITIES[i] * ease
+          angles[i] += velocities[i] * dt
+        }
+
+        if (progress >= 1) {
           phase = 'spinning'
-        }
-      } else {
-        cycleTime += dt
-
-        // Gravitational pull strength: 0 before pullStart, ramps with cubic ease
-        let pull = 0
-        if (cycleTime > pullStart) {
-          const pullProgress = (cycleTime - pullStart) / (cycleDuration - pullStart)
-          pull = Math.min(pullProgress, 1)
-          pull = pull * pull * pull // cubic ease — barely perceptible at first
-        }
-
-        let allAligned = true
-        for (const layer of layers) {
-          // Random velocity drift (always active, gives organic feel)
-          layer.velocity += (layer.targetVelocity - layer.velocity) * 0.3 * dt
-          if (Math.random() < 0.004) {
-            layer.targetVelocity = randomVelocity()
-          }
-
-          // Apply gravitational bias toward 0°
-          const norm = normAngle(layer.angle)
-          // The pull acts as a gentle torque toward 0, strengthening over time
-          const pullForce = -norm * pull * 1.2
-          // Also dampen velocity proportional to pull
-          const dampedVel = layer.velocity * (1 - pull * 0.7)
-
-          layer.angle += (dampedVel + pullForce) * dt
-
-          if (Math.abs(normAngle(layer.angle)) > 1.5) {
-            allAligned = false
-          }
-        }
-
-        // Check if all layers converged
-        if (pull > 0.8 && allAligned) {
-          phase = 'holding'
-          holdTime = 0
-          for (const layer of layers) {
-            layer.velocity = 0
-          }
-        }
-
-        // Safety: if cycle ran way too long, force hold
-        if (cycleTime > cycleDuration * 1.5) {
-          phase = 'holding'
-          holdTime = 0
-          for (const layer of layers) {
-            layer.angle = 0
-            layer.velocity = 0
-          }
+          phaseTime = 0
+          nextPause = 6 + Math.random() * 8 // 6-14s until next pause
         }
       }
 
-      // Compute convergence for opacity
-      const maxDist = Math.max(...layers.map(l => Math.abs(normAngle(l.angle))))
-      const convergence = 1 - Math.min(maxDist / 60, 1)
+      // Convergence for opacity (how close to aligned)
+      const maxDist = Math.max(
+        ...Array.from(angles).map(a => {
+          const n = ((a % 360) + 360) % 360
+          return Math.min(n, 360 - n)
+        })
+      )
+      const convergence = 1 - Math.min(maxDist / 45, 1)
 
       for (let i = 0; i < NUM_LAYERS; i++) {
-        portal.style.setProperty(LAYER_NAMES[i], `${layers[i].angle.toFixed(2)}deg`)
+        portal.style.setProperty(LAYER_NAMES[i], `${angles[i].toFixed(2)}deg`)
       }
       portal.style.setProperty('--halo-convergence', convergence.toFixed(3))
     }

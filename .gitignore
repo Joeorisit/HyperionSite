@@ -23,7 +23,7 @@ RalphLoop/
 
 # Internal docs (not for public repo)
 Hyperion-Brand-Guidelines.docx
-tech-debt-audit-*.docx
+tech-debt-audit*
 
 # Vite scaffold leftover
 src/assets/vite.svg
